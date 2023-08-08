@@ -1,9 +1,3 @@
-# v2.1 STABLE
-# - Manual entering of delta values
-
-# v2.2
-# - Entering of delta values is now automated
-# - Main delay between messages is increased from 1 minute to 2 minutes
 # NOTES:
 # x) parse_delta does not parse correctly different states of the Жаба инфо
 # x) Improve overall code structure (redundancy and etc):
@@ -43,7 +37,7 @@ import time
 import json
 import argparse
 
-WORK_MESSAGE = "Поход в столовую"
+
 DELAY = 2  # seconds, main delay between messages
 SLOWED_ACCOUNTS = [
     "rostikalt",
@@ -132,44 +126,6 @@ def genfotd(start_time, gendays):
     return messages
 
 
-def main(account_names, fotd):
-    for account_name in account_names:
-        bot = Bot(account_name)
-        # get is_premium from accounts.json
-        is_premium = ACCOUNTS[account_name]["is_premium"]
-        data = bot.get_data()
-        now = datetime.now()
-        work_start_time = now + data["work_delta"] + timedelta(minutes=2)
-        feed_start_time = now + data["feed_delta"] + timedelta(minutes=2)
-        gen_days = calc_gen_days(
-            WORK_MESSAGE,
-            is_premium,
-            fotd,
-        )
-        # start generating messages
-        messages = []
-        messages += genwork(
-            work_start_time,
-            is_premium,
-            WORK_MESSAGE,
-            gen_days,
-        )
-        messages += genfeed(
-            feed_start_time,
-            is_premium,
-            gen_days,
-        )
-        if fotd:
-            fotd_start_time = now + timedelta(days=1)
-            fotd_start_time = fotd_start_time.replace(hour=0, minute=0, second=0)
-            messages += genfotd(
-                fotd_start_time,
-                gen_days,
-            )
-        messages.sort(key=lambda x: x[1])
-        bot.execute(messages)
-
-
 class Bot:
     def __init__(self, account_name):
         self.account_name = account_name
@@ -218,6 +174,44 @@ class Bot:
         return data
 
 
+def main(account_names, fotd, work_message):
+    for account_name in account_names:
+        bot = Bot(account_name)
+        # get is_premium from accounts.json
+        is_premium = ACCOUNTS[account_name]["is_premium"]
+        data = bot.get_data()
+        now = datetime.now()
+        work_start_time = now + data["work_delta"] + timedelta(minutes=2)
+        feed_start_time = now + data["feed_delta"] + timedelta(minutes=2)
+        gen_days = calc_gen_days(
+            work_message,
+            is_premium,
+            fotd,
+        )
+        # start generating messages
+        messages = []
+        messages += genwork(
+            work_start_time,
+            is_premium,
+            work_message,
+            gen_days,
+        )
+        messages += genfeed(
+            feed_start_time,
+            is_premium,
+            gen_days,
+        )
+        if fotd:
+            fotd_start_time = now + timedelta(days=1)
+            fotd_start_time = fotd_start_time.replace(hour=0, minute=0, second=0)
+            messages += genfotd(
+                fotd_start_time,
+                gen_days,
+            )
+        messages.sort(key=lambda x: x[1])
+        bot.execute(messages)
+
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process the input for frog bot.")
     parser.add_argument(
@@ -232,8 +226,13 @@ if __name__ == "__main__":
         default=False,
         help="Whether to generate fotd messages (add --fotd to the end of the command for True, else just don't add anything)",
     )
+    parser.add_argument(
+        "--work_message",
+        default="Работа грабитель",
+        help="If you want a different work message than Работа грабитель",
+    )
     args = parser.parse_args()
-    main(args.account_names, args.fotd)
+    main(args.account_names, args.fotd, args.work_message)
 
 
 """
