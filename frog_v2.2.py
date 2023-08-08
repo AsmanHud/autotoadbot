@@ -1,3 +1,16 @@
+# v2.1 STABLE
+# - Manual entering of delta values
+
+# v2.2
+# - Entering of delta values is now automated
+# - Main delay between messages is increased from 1 minute to 2 minutes
+# NOTES:
+# x) parse_delta does not parse correctly different states of the Жаба инфо
+# x) Improve overall code structure (redundancy and etc):
+# x) Get rid of unnecesary time.sleeps and add where it could be necessary
+# x) Get rid of slowed_accounts restriction (or apply it to all accounts)
+# x) Figure out if you can delete all planned messages (target them specifically)
+
 # To-do list
 # - [x] Reinitialize rostikalt2 (Серик)
 # - [x] Rename hash_id to api_hash (in the script and in data.json)
@@ -69,7 +82,7 @@ def parse_toad_info(raw_toad_info):
         work_delta_vals = [0, 0]
     if not feed_delta_vals:
         feed_delta_vals = [0, 0]
-    work_delta = timedelta(hours=work_delta_vals[0], minutes=feed_delta_vals[1])
+    work_delta = timedelta(hours=work_delta_vals[0], minutes=work_delta_vals[1])
     feed_delta = timedelta(hours=feed_delta_vals[0], minutes=feed_delta_vals[1])
     return work_delta, feed_delta
 
@@ -188,6 +201,7 @@ class Bot:
         data = {}
         with Client(self.session_name, self.api_id, self.api_hash) as app:
             app.send_message(self.chat_id, "Завершить работу")
+            time.sleep(0.1)
             app.send_message(self.chat_id, "Жаба инфо")
             for _ in range(10):
                 time.sleep(0.1)
