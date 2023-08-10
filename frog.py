@@ -1,34 +1,55 @@
+# Added in 2.3 update:
+# - Now there is an option to synchronize times when accounts are
+# sent to work (technically it works for the feed times as well,
+# but there feed times will not be synced properly if some of the accounts are premium,
+# and some are not).
+
+# - Moved work message from constants to argparser,
+# (the default is "Работа грабитель", and you can optionally add this argument
+# to change the work message if you would like)
+
+# - Now there is an option to manually enter absolute start work time and
+# absolute feed start time, if needed. (though, mostly you won't need it)
+
+# - Finally removed the slowed accounts restriction, and ran the script
+# on 5 accounts at the same time (sync on), everything seems to work fine
+
+# - Added "Покормить жабу" with the "Завершить работу" to the get_data
+# functionality, so feed delta parsing is now 100% correct
+
+# !(did not test this yet) - Fixed the healing functionality,
+# by moving the healing block in genwork for loop to the top of the loop,
+# so now it will heal before the first instance of going to work as well
+
+# - Redid the notes system (Update info + NOTES + to-do list + in the future),
+# renamed the frog script to just frog.py.
+# Now the commit message should just include the version number of the update
+
+
 # NOTES:
-# x) parse_delta does not parse correctly different states of the Жаба инфо
-# x) Improve overall code structure (redundancy and etc):
-# x) Get rid of unnecesary time.sleeps and add where it could be necessary
-# x) Get rid of slowed_accounts restriction (or apply it to all accounts)
-# x) Figure out if you can delete all planned messages (target them specifically)
+# x) About the parse_data (specifically, work_delta)
+# For now, decided that the work delta value parsing is more or less fine
+# how it is, even if the toad was on work during the script running,
+# it would just mistakenly try to send the toad to work and get it from work
+# one time, and in other messages, it would work properly
+# Trying to rewrite the genwork function to fix such minor issue would
+# be an overkill, and would take too much time
+# x) Overall code quality could be always improved, and probably
+# there are many places where code is redundant (though, it works as it is)
+
 
 # To-do list
-# - [x] Reinitialize rostikalt2 (Серик)
-# - [x] Rename hash_id to api_hash (in the script and in data.json)
-# - [x] Automate entering work_delta and feed_delta
+# - [ ] Add a method to a bot to delete all planned messages
+# - [ ] Remove all notes from the script, and add them in a separate .md file
 
-# - Make the work/feed message generation better by including
-# all possible Жаба инфо messages:
-# - [x] Toad is not working/cannot be fed right now, and is not available
-# (there is a timer which states when toad can be sent to work/fed)
-# - [ ] Toad can be sent to work/fed right now
-# - [ ] Toad can be taken from work/fed right now
-# - [ ] Toad is working, but not available to take from work
-# (there is a timer that states when toad can be taken from work)
-# (currently it is treated as the cooldown before toad can be sent to work)
 
-# - [ ] Delete all residual messages sent by bot to keep the chat clean
-# - [ ] Maybe add cooldown between each accounts' execution? (determine if needed)
-# - [ ] If possible, get rid of slowed accounts slowdown
-
-# Maybe in future
-# - Maybe it is possible to find the latest scheduled message(s)
-# and based on those manage start time values
-# instead of manually deleting all scheduled messages before running the script
+# Features that could be implemented in the future:
+# - Maybe it would be a good measure to add a functionality to
+# delete all resisual messages created by the script
+# (right now it is not that difficult to delete them manually)
+# - Is it possible to delete all planned messages before any execution?
 # - Maybe add more functionality, like caring about little toad
+# - Maybe add going to party functionality (though, it is not really needed)
 
 
 from datetime import datetime, timedelta
@@ -39,14 +60,6 @@ import argparse
 
 
 DELAY = 2  # seconds, main delay between messages
-SLOWED_ACCOUNTS = [
-    "rostikalt",
-    "rostikalt2",
-    "danikalt2",
-    "asmanalt2",
-    "asmanalt3",
-]
-SLOWED_ACCOUNTS_SLEEP_PER_MESSAGE_SCHEDULED = 0.1  # seconds
 SCHEDULED_MESSAGES_LIMIT = 100
 with open("data.json", "r") as f:
     data = json.load(f)
@@ -96,14 +109,14 @@ def genwork(start_time, is_premium, work_message, gendays):
     messages = []
     current_time = start_time  # datetime object
     for _ in range(gendays * 3):
-        messages.append([work_message, current_time])
-        current_time += timedelta(hours=2, minutes=DELAY)
-        messages.append(["Завершить работу", current_time])
-        current_time += timedelta(hours=6)
         if not is_premium and work_message == "Работа грабитель":
             current_time -= timedelta(minutes=DELAY)
             messages.append(["Реанимировать жабу", current_time])
             current_time += timedelta(minutes=DELAY)
+        messages.append([work_message, current_time])
+        current_time += timedelta(hours=2, minutes=DELAY)
+        messages.append(["Завершить работу", current_time])
+        current_time += timedelta(hours=6)
     return messages
 
 
@@ -142,21 +155,23 @@ class Bot:
                     app.send_message(
                         self.chat_id, message_text, schedule_date=schedule_time
                     )
-                    if self.account_name in SLOWED_ACCOUNTS:
-                        time.sleep(SLOWED_ACCOUNTS_SLEEP_PER_MESSAGE_SCHEDULED)
                 except errors.FloodWait as e:
-                    if e.value > 10:
+                    if e.value > 30:
                         return
                     print(f"Flood wait for {e.value} seconds")
                     time.sleep(e.value)
                 except errors.ScheduleTooMuch as e:
-                    print(f"{e}\nAccount: {self.account_name}")
+                    print(
+                        f"{self.account_name}: Too many scheduled messages, going for the next account."
+                    )
                     return
 
     def get_data(self):
         data = {}
         with Client(self.session_name, self.api_id, self.api_hash) as app:
             app.send_message(self.chat_id, "Завершить работу")
+            time.sleep(0.1)
+            app.send_message(self.chat_id, "Покормить жабу")
             time.sleep(0.1)
             app.send_message(self.chat_id, "Жаба инфо")
             for _ in range(10):
@@ -174,15 +189,39 @@ class Bot:
         return data
 
 
-def main(account_names, fotd, work_message):
+def main(
+    account_names,
+    fotd,
+    work_message,
+    sync_accounts,
+    absolute_work_time,
+    absolute_feed_time,
+):
+    sync_delay = 0
+    if sync_accounts:
+        all_data = []
+        for account_name in account_names:
+            bot = Bot(account_name)
+            all_data.append(bot.get_data())
+        work_delta = max([data["work_delta"] for data in all_data])
+        feed_delta = max([data["feed_delta"] for data in all_data])
+    now = datetime.now()
+    if absolute_work_time is not None:
+        work_start_time = datetime.strptime(absolute_work_time, "%Y-%m-%d_%H:%M")
+    if absolute_feed_time is not None:
+        feed_start_time = datetime.strptime(absolute_feed_time, "%Y-%m-%d_%H:%M")
     for account_name in account_names:
         bot = Bot(account_name)
         # get is_premium from accounts.json
         is_premium = ACCOUNTS[account_name]["is_premium"]
-        data = bot.get_data()
-        now = datetime.now()
-        work_start_time = now + data["work_delta"] + timedelta(minutes=2)
-        feed_start_time = now + data["feed_delta"] + timedelta(minutes=2)
+        if not sync_accounts:
+            data = bot.get_data()
+            work_delta = data["work_delta"]
+            feed_delta = data["feed_delta"]
+        if absolute_work_time is None:
+            work_start_time = now + work_delta + timedelta(minutes=2 + sync_delay)
+        if absolute_feed_time is None:
+            feed_start_time = now + feed_delta + timedelta(minutes=2 + sync_delay)
         gen_days = calc_gen_days(
             work_message,
             is_premium,
@@ -210,6 +249,8 @@ def main(account_names, fotd, work_message):
             )
         messages.sort(key=lambda x: x[1])
         bot.execute(messages)
+        if sync_accounts:
+            sync_delay += 2
 
 
 if __name__ == "__main__":
@@ -231,20 +272,43 @@ if __name__ == "__main__":
         default="Работа грабитель",
         help="If you want a different work message than Работа грабитель",
     )
+    parser.add_argument(
+        "--sync_accounts",
+        action="store_true",
+        default=False,
+        help="Whether to synchronize all accounts' work and feed times with a const delay (for parties as an example)",
+    )
+    parser.add_argument(
+        "--absolute_work_time",
+        default=None,
+        type=str,
+        help="If you want to set an absolute work time for an account, use this argument. Format: YYYY-MM-DD_HH:MM (don't use with multiple accounts)",
+    )
+    parser.add_argument(
+        "--absolute_feed_time",
+        default=None,
+        type=str,
+        help="If you want to set an absolute feed time for an account, use this argument. Format: YYYY-MM-DD_HH:MM (don't use with multiple accounts)",
+    )
     args = parser.parse_args()
-    main(args.account_names, args.fotd, args.work_message)
+    main(
+        args.account_names,
+        args.fotd,
+        args.work_message,
+        args.sync_accounts,
+        args.absolute_work_time,
+        args.absolute_feed_time,
+    )
 
 
 """
 General prompt structure:
-python frog_v2.1.py account1 account2... --fotd
+python frog.py account1 account2... --fotd
 Some common prompts
-python frog_v2.1.py 
-python frog_v2.1.py asmanmain
-python frog_v2.1.py asmanalt --fotd
-python frog_v2.1.py danikalt
-python frog_v2.1.py rostikalt
-python frog_v2.1.py rostikalt2
-python frog_v2.1.py asmanalt2
-python frog_v2.1.py asmanalt3
+python frog.py 
+python frog.py asmanmain
+python frog.py asmanalt --fotd
+python frog.py asmanalt2 asmanalt3 rostikalt rostikalt2 danikalt --sync_accounts
+python frog.py asmanmain --absolute_work_time 2023-08-10_22:50
+python frog.py asmanalt --fotd --absolute_work_time 2023-08-10_22:52
 """
