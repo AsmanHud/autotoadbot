@@ -1,3 +1,20 @@
+DATA_IS_HARD_CODED = False
+# If you want to hard code your data, set DATA_IS_HARD_CODED to True,
+# and fill in the data dictionary below
+data = {
+    "accounts": {
+        "account1": {
+            "api_id": "12345678",
+            "api_hash": "1234567890abcdef1234567890abcdef",
+            "is_premium": False,
+        },
+    }
+}
+
+# Mini-update 2.3.1:
+# - Now there is a way to hard code your data,
+# (made for the people who don't know how to use json files)
+
 # Added in 2.3 update:
 # - Now there is an option to synchronize times when accounts are
 # sent to work (technically it works for the feed times as well,
@@ -61,8 +78,9 @@ import argparse
 
 DELAY = 2  # seconds, main delay between messages
 SCHEDULED_MESSAGES_LIMIT = 100
-with open("data.json", "r") as f:
-    data = json.load(f)
+if not DATA_IS_HARD_CODED:
+    with open("data.json", "r") as f:
+        data = json.load(f)
 ACCOUNTS = data["accounts"]
 CHAT_ID = data["chat_id"]
 
@@ -299,16 +317,3 @@ if __name__ == "__main__":
         args.absolute_work_time,
         args.absolute_feed_time,
     )
-
-
-"""
-General prompt structure:
-python frog.py account1 account2... --fotd
-Some common prompts
-python frog.py 
-python frog.py asmanmain
-python frog.py asmanalt --fotd
-python frog.py asmanalt2 asmanalt3 rostikalt rostikalt2 danikalt --sync_accounts
-python frog.py asmanmain --absolute_work_time 2023-08-10_22:50
-python frog.py asmanalt --fotd --absolute_work_time 2023-08-10_22:52
-"""
