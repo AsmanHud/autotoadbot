@@ -8,7 +8,8 @@ data = {
             "api_hash": "1234567890abcdef1234567890abcdef",
             "is_premium": False,
         },
-    }
+    },
+    "chat_id": -1001234567890,
 }
 
 # Mini-update 2.3.1:
